@@ -82,3 +82,58 @@ export async function POST(request) {
     );
   }
 }
+
+export async function PATCH(request) {
+  try {
+    await connectToDatabase();
+    const body = await request.json();
+    const { requestId, status, responseStatus, citizenId } = body;
+
+    if (!requestId) {
+      return NextResponse.json(
+        { success: false, message: 'requestId is required' },
+        { status: 400 }
+      );
+    }
+
+    const bloodRequest = await BloodRequest.findOne({ requestId });
+    if (!bloodRequest) {
+      return NextResponse.json(
+        { success: false, message: `Blood request '${requestId}' not found` },
+        { status: 404 }
+      );
+    }
+
+    if (status) {
+      if (!['Open', 'Fulfilled', 'Cancelled'].includes(status)) {
+        return NextResponse.json(
+          { success: false, message: "status must be 'Open', 'Fulfilled', or 'Cancelled'" },
+          { status: 400 }
+        );
+      }
+      bloodRequest.status = status;
+    }
+
+    if (citizenId && responseStatus) {
+      const donor = bloodRequest.matchedDonors.find((d) => d.citizenId === citizenId);
+      if (donor) {
+        donor.responded = true;
+        donor.responseStatus = responseStatus;
+      }
+    }
+
+    await bloodRequest.save();
+
+    return NextResponse.json({
+      success: true,
+      message: 'Blood request updated successfully',
+      bloodRequest,
+    });
+  } catch (error) {
+    console.error('Update blood request error:', error);
+    return NextResponse.json(
+      { success: false, message: 'Failed to update blood request', error: error.message },
+      { status: 500 }
+    );
+  }
+}
